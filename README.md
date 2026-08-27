@@ -14,13 +14,13 @@ Biblioteca Python 100% assíncrona e orientada a eventos para interação com a 
 ## Instalação
 
 ```bash
-pip install git+https://github.com/USER/iqoption-client.git
+pip install git+https://github.com/IzioGanasi/iqoption-client.git
 ```
 
 Ou instale localmente:
 
 ```bash
-git clone https://github.com/USER/iqoption-client.git
+git clone https://github.com/IzioGanasi/iqoption-client.git
 cd iqoption-client
 pip install -e .
 ```
