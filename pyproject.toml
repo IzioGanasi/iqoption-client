@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "iqoption-client"
+version = "1.0.0"
+description = "Async IQ Option WebSocket client"
+requires-python = ">=3.10"
+dependencies = [
+    "aiohttp>=3.9",
+    "websockets>=13.0",
+    "python-dotenv>=1.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
