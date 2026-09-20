@@ -49,10 +49,10 @@ class AssetsManager:
         return self._commissions.get(type_key, {}).get(active_id, 0)
 
     def get_payout(self, active_id: int, option_type: OptionType) -> int:
-        """Get payout percentage (e.g. 112 means 112% return)."""
+        """Get payout percentage (e.g. comm=14 means 100-14 = 86% net profit return)."""
         comm = self.get_commission(active_id, option_type)
         if comm > 0:
-            return 100 + comm
+            return 100 - comm
         active = self.get_active(active_id, option_type)
         if active and active.option:
             return active.option.payout_percent

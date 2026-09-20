@@ -32,7 +32,7 @@ class OptionInfo:
 
     @property
     def payout_percent(self) -> int:
-        return 100 + self.profit_commission
+        return 100 - self.profit_commission
 
 
 @dataclass
