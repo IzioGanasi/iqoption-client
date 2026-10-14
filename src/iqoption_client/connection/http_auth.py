@@ -40,7 +40,12 @@ class HTTPAuth:
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=self._config.request_timeout),
             ) as resp:
-                data = await resp.json()
+                try:
+                    data = await resp.json()
+                except (aiohttp.ClientError, ValueError) as e:
+                    raise AuthenticationError(
+                        f"Login failed: server returned invalid JSON (HTTP {resp.status})"
+                    ) from e
                 logger.debug("Login response: status=%s", resp.status)
                 if not isinstance(data, dict):
                     raise AuthenticationError("Login failed: unexpected response format")
