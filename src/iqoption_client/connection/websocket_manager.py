@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import time
 from typing import Optional
 
 import websockets
@@ -55,7 +54,7 @@ class WebSocketManager:
                 max_size=2**24,  # 16MB to handle large init data
             )
         except Exception as e:
-            raise WebSocketError(f"Failed to connect: {e}")
+            raise WebSocketError(f"Failed to connect: {e}") from e
 
         self._receive_task = asyncio.create_task(self._receive_loop())
 
@@ -77,10 +76,11 @@ class WebSocketManager:
                 "client_session_id": "",
             },
         }
-        await self._ws_send(msg)
 
-        # Wait for "authenticated" response (not a result ack)
-        result = await self._wait_for_response(request_id, timeout=10.0)
+        # Register the waiter before sending: the server may answer immediately.
+        result = await self._send_and_wait_for_response(
+            request_id, msg, timeout=10.0
+        )
         if not result.get("success"):
             raise WebSocketError("Authentication failed")
 
@@ -105,14 +105,16 @@ class WebSocketManager:
                 await self._receive_task
             except asyncio.CancelledError:
                 pass
+            self._receive_task = None
         if self._ws:
             await self._ws.close()
+            self._ws = None
 
     async def _ws_send(self, data: dict) -> None:
         if not self._ws:
             raise WebSocketError("WebSocket not connected")
         raw = json.dumps(data)
-        logger.debug(f"WS SEND: {raw[:200]}")
+        logger.debug("WS SEND: %s", raw[:200])
         await self._ws.send(raw)
 
     async def _receive_loop(self) -> None:
@@ -122,29 +124,35 @@ class WebSocketManager:
                     message = json.loads(raw)
                     await self._event_bus.dispatch(message)
                 except json.JSONDecodeError:
-                    logger.warning(f"Invalid JSON received: {raw[:100]}")
+                    logger.warning("Invalid JSON received: %s", raw[:100])
                 except Exception as e:
-                    logger.error(f"Error processing message: {e}")
+                    logger.error("Error processing message: %s", e)
         except websockets.ConnectionClosed as e:
-            logger.warning(f"WebSocket closed: {e}")
+            logger.warning("WebSocket closed: %s", e)
             self._connected.clear()
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.error(f"Receive loop error: {e}")
+            logger.error("Receive loop error: %s", e)
             self._connected.clear()
 
-    async def _wait_for_response(
-        self, request_id: str, timeout: float = 10.0
+    async def _send_and_wait_for_response(
+        self, request_id: str, message: dict, timeout: float = 10.0
     ) -> dict:
-        future = asyncio.get_event_loop().create_future()
+        """Send a request only after registering its response future.
+
+        Registering after send creates a race: a fast server response can be
+        dispatched before the future exists and is then silently discarded.
+        """
+        future = asyncio.get_running_loop().create_future()
         self._event_bus.set_pending(request_id, future)
         try:
-            result = await asyncio.wait_for(future, timeout=timeout)
-            return result
-        except asyncio.TimeoutError:
-            self._event_bus.remove_pending(request_id)
-            raise WebSocketError(f"Timeout waiting for response to {request_id}")
+            await self._ws_send(message)
+            return await asyncio.wait_for(future, timeout=timeout)
+        except asyncio.TimeoutError as e:
+            raise WebSocketError(
+                f"Timeout waiting for response to {request_id}"
+            ) from e
         finally:
             self._event_bus.remove_pending(request_id)
 
@@ -169,9 +177,9 @@ class WebSocketManager:
             "msg": msg_content,
         }
 
-        await self._ws_send(envelope)
-        result = await self._wait_for_response(request_id, timeout=timeout)
-        return result
+        return await self._send_and_wait_for_response(
+            request_id, envelope, timeout=timeout
+        )
 
     async def subscribe(
         self,
