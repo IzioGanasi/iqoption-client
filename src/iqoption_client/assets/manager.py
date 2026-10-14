@@ -171,6 +171,10 @@ class AssetsManager:
             return None
 
         for active in actives.values():
+            if active.is_open(server_time) and (active.provider == "OTC" or "OTC" in active.ticker or "OTC" in active.name):
+                return active
+
+        for active in actives.values():
             if active.is_open(server_time):
                 return active
         return None

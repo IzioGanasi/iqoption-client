@@ -12,8 +12,12 @@ except ImportError:
 
 @dataclass
 class Config:
-    email: str = field(default_factory=lambda: os.getenv("IQOPTION_EMAIL", ""))
-    password: str = field(default_factory=lambda: os.getenv("IQOPTION_PASSWORD", ""))
+    email: str = field(
+        default_factory=lambda: os.getenv("IQOPTION_EMAIL") or os.getenv("IQEMAIL", "")
+    )
+    password: str = field(
+        default_factory=lambda: os.getenv("IQOPTION_PASSWORD") or os.getenv("IQPASSWORD", "")
+    )
     account_type: str = field(default_factory=lambda: os.getenv("IQOPTION_ACCOUNT_TYPE", "demo"))
     log_level: str = field(default_factory=lambda: os.getenv("IQOPTION_LOG_LEVEL", "INFO"))
     ws_url: str = "wss://ws.iqoption.com/echo/websocket"

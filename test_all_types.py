@@ -18,6 +18,13 @@ from iqoption_client.models.enums import OptionType, Direction, InstrumentType
 from iqoption_client.exceptions import TradingError
 from iqoption_client.operations.manager import Operation
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 logger = logging.getLogger("test_all_types")
 results_log = []
 
@@ -25,7 +32,7 @@ results_log = []
 def log_result(test_name, result, details=""):
     entry = {"test": test_name, "result": result, "details": details, "time": time.time()}
     results_log.append(entry)
-    sym = "✅" if result == "PASS" else "❌" if result == "FAIL" else "ℹ️"
+    sym = "[OK]" if result == "PASS" else "[FAIL]" if result == "FAIL" else "[INFO]"
     print(f"  {sym} [{test_name}] {result}: {details}")
 
 
@@ -110,7 +117,7 @@ async def test_blitz(client):
     bal_after = client.accounts.account.active_balance.amount
     diff = bal_after - bal_before
     log_result("blitz_balance", "PASS",
-               f"${bal_before:.2f} → ${bal_after:.2f} (diff={diff:+.2f})")
+               f"${bal_before:.2f} -> ${bal_after:.2f} (diff={diff:+.2f})")
 
 
 async def test_turbo(client):
@@ -148,7 +155,7 @@ async def test_turbo(client):
         bal_after = client.accounts.account.active_balance.amount
         diff = bal_after - bal_before
         log_result("turbo_balance", "PASS",
-                   f"${bal_before:.2f} → ${bal_after:.2f} (diff={diff:+.2f})")
+                   f"${bal_before:.2f} -> ${bal_after:.2f} (diff={diff:+.2f})")
     except Exception as e:
         log_result("turbo_balance", "FAIL", f"Balance check failed: {e}")
 
@@ -195,7 +202,7 @@ async def test_binary(client):
         bal_after = client.accounts.account.active_balance.amount
         diff = bal_after - bal_before
         log_result("binary_balance", "PASS",
-                   f"${bal_before:.2f} → ${bal_after:.2f} (diff={diff:+.2f})")
+                   f"${bal_before:.2f} -> ${bal_after:.2f} (diff={diff:+.2f})")
     except Exception as e:
         log_result("binary_balance", "FAIL", f"Balance check failed: {e}")
 
@@ -210,14 +217,14 @@ async def test_digital(client):
 
     await client.subscribe_positions(InstrumentType.DIGITAL_OPTION)
 
-    instrument_event = {"data": None}
+    last_instrument = {"data": None}
 
     async def on_instrument(msg):
         if isinstance(msg, dict):
             # Event bus passes full message; asset_id is in msg.msg
             inner = msg.get("msg", msg)
             if isinstance(inner, dict) and inner.get("asset_id") == asset_id:
-                instrument_event["data"] = inner
+                last_instrument["data"] = inner
 
     client.events.on("instrument-generated", on_instrument)
 
@@ -235,17 +242,19 @@ async def test_digital(client):
         log_result("digital_subscribe", "FAIL", str(e))
         return
 
-    print("  Waiting for instrument (60s)...")
+    # Wait for a fresh instrument event to ensure the index and strikes are active
+    last_instrument["data"] = None
+    print("  Waiting for fresh instrument (60s)...")
     for _ in range(120):
-        if instrument_event["data"]:
+        if last_instrument["data"]:
             break
         await asyncio.sleep(0.5)
 
-    if not instrument_event["data"]:
-        log_result("digital_instrument", "FAIL", "No instrument event received!")
+    if not last_instrument["data"]:
+        log_result("digital_instrument", "FAIL", "No fresh instrument event received!")
         return
 
-    evt = instrument_event["data"]
+    evt = last_instrument["data"]
     index = evt.get("index")
     call_items = [d for d in evt.get("data", []) if d.get("direction") == "call"]
     if not call_items:
@@ -270,7 +279,7 @@ async def test_digital(client):
         bal_after = client.accounts.account.active_balance.amount
         diff = bal_after - bal_before
         log_result("digital_balance", "PASS",
-                   f"${bal_before:.2f} → ${bal_after:.2f} (diff={diff:+.2f})")
+                   f"${bal_before:.2f} -> ${bal_after:.2f} (diff={diff:+.2f})")
     except Exception as e:
         log_result("digital_place", "FAIL", str(e))
 
@@ -351,7 +360,7 @@ async def main():
 
         connected = await test_connection(client)
         if not connected:
-            print("\n❌ Cannot continue without connection")
+            print("\n[FAIL] Cannot continue without connection")
             return
 
         await test_blitz(client)
@@ -370,8 +379,8 @@ async def main():
         failed = sum(1 for r in results_log if r["result"] == "FAIL")
 
         print(f"  Total: {len(results_log)} tests")
-        print(f"  ✅ Passed: {passed}")
-        print(f"  ❌ Failed: {failed}")
+        print(f"  [PASS] Passed: {passed}")
+        print(f"  [FAIL] Failed: {failed}")
 
         if failed > 0:
             print("\n  Failed tests:")
@@ -382,7 +391,7 @@ async def main():
         print("\n" + "=" * 60)
 
     except Exception as e:
-        print(f"\n❌ FATAL ERROR: {e}")
+        print(f"\n[FAIL] FATAL ERROR: {e}")
         import traceback
         traceback.print_exc()
     finally:
