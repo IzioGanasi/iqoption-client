@@ -21,3 +21,6 @@ Repository = "https://github.com/IzioGanasi/iqoption-client"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
